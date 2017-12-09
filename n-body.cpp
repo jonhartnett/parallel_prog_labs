@@ -35,9 +35,9 @@ int main(){
      */
 
     StreamIterator iter = allocStreamIter(stdin);
-    printf("n: ");
+    printf("n (body count): ");
     size_t n = readUInt32(iter);
-    printf("timespan: ");
+    printf("timespan (s): ");
     double timespan = readFloat64(iter);
     printf("steps: ");
     size_t steps = readUInt32(iter);
@@ -47,11 +47,11 @@ int main(){
     Vector* accs = array(Vector, n);
     Random rand = seed(0);
     for(size_t i = 0; i < n; i++){
-        printf("body %ld:\n    mass: ", i);
+        printf("body %ld:\n    mass (kg): ", i);
         double mass = readFloat64(iter);
-        printf("    position: ");
+        printf("    position (m): ");
         Vector pos = Vector(readFloat64(iter), readFloat64(iter), readFloat64(iter));
-        printf("    velocity: ");
+        printf("    velocity (m/s): ");
         Vector vel = Vector(readFloat64(iter), readFloat64(iter), readFloat64(iter));
         particles[i] = Particle(mass, pos, vel);
     }
@@ -68,7 +68,7 @@ int main(){
 
     for(size_t i = 0; i < n; i++){
         Particle& p = particles[i];
-        printf("body %ld:\n    position: %lf %lf %lf\n    velocity: %lf %lf %lf\n", i, p.pos.x, p.pos.y, p.pos.z, p.vel.x, p.vel.y, p.vel.z);
+        printf("body %ld:\n    position (m): %lf %lf %lf\n    velocity (m/s): %lf %lf %lf\n", i, p.pos.x, p.pos.y, p.pos.z, p.vel.x, p.vel.y, p.vel.z);
     }
 
     freeStreamIter(iter);
