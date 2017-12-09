@@ -66,7 +66,8 @@ int main(){
     for(int i = 0; i < data_count; i++){
         float datum = data[i];
         int bin = (int)((datum - min_meas) / bin_width);
-        bin_counts.data[bin]++;
+        if(bin > 0 && bin <= bin_counts.length)
+            bin_counts.data[bin]++;
     }
 
     //print results
