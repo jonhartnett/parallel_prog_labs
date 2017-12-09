@@ -8,7 +8,6 @@ public:
     double mass;
     Vector pos;
     Vector vel;
-    Vector acc;
 
     Particle(double mass, Vector pos, Vector vel=0);
 };

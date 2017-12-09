@@ -9,26 +9,32 @@ double scale(double x, double min, double max);
 
 int main(){
     //This program prints the mandelbrot set to stdout as a .ppm image file
-
-    size_t width = 1024;
-    size_t height = 1024;
+    // width and height can be modified below
+    size_t width = 2048;
+    size_t height = 2048;
+    
     printf("P6 %ld %ld 255\n", width, height);
 
-    uint8_t* data = array(uint8_t, width * height * 3);
+    uint8_t** data = array(uint8_t*, height);
 
-#pragma omp parallel for
-    for(int y = 0; y < height; y++)
-    for(int x = 0; x < width; x++){
-        double fx = scale(x / (double)width, -2, 1);
-        double fy = scale(y / (double)height, -1.5, 1.5);
-        uint8_t value = mandelbrot(fx, fy);
-        size_t i = (x + y * width) * 3;
-        data[i++] = value;
-        data[i++] = value;
-        data[i++] = value;
+    #pragma omp parallel for
+    for(size_t y = 0; y < height; y++)
+    {
+        uint8_t* row = array(uint8_t, width * 3);
+        for(size_t x = 0; x < width; x++){
+            double fx = scale(x / (double)width, -2, 1);
+            double fy = scale(y / (double)height, -1.5, 1.5);
+            uint8_t value = mandelbrot(fx, fy);
+            size_t i = x * 3;
+            row[i++] = value;
+            row[i++] = value;
+            row[i++] = value;
+        }
+        data[y] = row;
     }
 
-    fwrite(data, 3, width * height, stdout);
+    for(size_t y = 0; y < height; y++)
+        fwrite(data[y], 3, width, stdout);
 }
 
 

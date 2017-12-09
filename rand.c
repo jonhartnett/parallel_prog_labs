@@ -1,6 +1,7 @@
 #include <float.h>
 #include "rand.h"
 
+//implementation from: https://stackoverflow.com/a/29485641/4542404
 Random seed(uint64_t seed){
     Random rand;
     rand.next = seed;

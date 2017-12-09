@@ -1,15 +1,18 @@
 #include <cstdlib>
+#include <cmath>
+#include <omp.h>
 #include "io-util.h"
 #include "util.h"
 #include "vector.h"
 #include "particle.h"
+#include "rand.h"
 
 #define G 6.673e-11
 
-void solveBasic(Particle particles[], size_t n);
-void solveReduced(Particle particles[], size_t n);
-void stepEuler(Particle particles[], size_t n, double dt);
-void stepRungeKutta(Particle particles[], size_t n, double dt);
+void solveBasic(const Particle particles[], Vector accs[], size_t n);
+void solveReduced(const Particle particles[], Vector accs[], size_t n);
+void stepEuler(Particle particles[], Vector accs[], size_t n, double dt);
+void stepRungeKutta(Particle particles[], Vector accs[], size_t n, double dt);
 
 int main(){
     /**
@@ -41,6 +44,8 @@ int main(){
     double dt = timespan / steps;
 
     Particle* particles = array(Particle, n);
+    Vector* accs = array(Vector, n);
+    Random rand = seed(0);
     for(size_t i = 0; i < n; i++){
         printf("body %ld:\n    mass: ", i);
         double mass = readFloat64(iter);
@@ -51,8 +56,15 @@ int main(){
         particles[i] = Particle(mass, pos, vel);
     }
 
-    for(size_t step = 0; step < steps; step++)
-        stepRungeKutta(particles, n, dt);
+    DECLARE_TIMED_VARIABLES();
+    START_TIMED();
+    for(size_t step = 0; step < steps; step++){
+        if(step % (steps / 10) == 0)
+            printf("%ld%%\n", step * 100 / steps);
+        stepRungeKutta(particles, accs, n, dt);
+    }
+    END_TIMED();
+    printf("time elapsed: %ld ms\n", MILLIS_ELAPSED());
 
     for(size_t i = 0; i < n; i++){
         Particle& p = particles[i];
@@ -62,83 +74,87 @@ int main(){
     freeStreamIter(iter);
 }
 
-void solveSingle(Particle particles[], size_t n, size_t q){
-    particles[q].acc = 0;
+Vector solveSingle(const Particle particles[], size_t n, size_t q){
+    Vector acc = 0;
+    #pragma omp declare reduction \
+        (vec_add:Vector:omp_out += omp_in) \
+        initializer(omp_priv=0)
+    #pragma omp parallel for reduction(vec_add:acc)
     for(size_t k = 0; k < n; k++){
         if(q == k)
             continue;
-        Particle& pq = particles[q];
-        Particle& pk = particles[k];
+        const Particle& pq = particles[q];
+        const Particle& pk = particles[k];
         Vector dif = pq.pos - pk.pos;
         double disSq = dif.lengthSq();
         double multi = G * pk.mass / disSq;
-        pq.acc -= dif.normalized() * multi;
+        acc -= dif.normalized() * multi;
     }
+    return acc;
 }
-void solveBasic(Particle particles[], size_t n){
+void solveBasic(const Particle particles[], Vector accs[], size_t n){
     for(size_t i = 0; i < n; i++)
-        particles[i].acc = 0;
+        accs[i] = 0;
+    #pragma omp parallel for
     for(size_t q = 0; q < n; q++)
     for(size_t k = 0; k < n; k++){
         if(q == k)
             continue;
-        Particle& pq = particles[q];
-        Particle& pk = particles[k];
+        const Particle& pq = particles[q];
+        const Particle& pk = particles[k];
         Vector dif = pq.pos - pk.pos;
         double disSq = dif.lengthSq();
         double multi = G * pk.mass / disSq;
-        pq.acc -= dif.normalized() * multi;
+        accs[q] -= dif.normalized() * multi;
     }
 }
-void solveReduced(Particle particles[], size_t n){
+void solveReduced(const Particle particles[], Vector accs[], size_t n){
     for(size_t i = 0; i < n; i++)
-        particles[i].acc = 0;
+        accs[i] = 0;
+    #pragma omp parallel for
     for(size_t q = 0; q < n; q++)
     for(size_t k = q + 1; k < n; k++){
-        Particle& pq = particles[q];
-        Particle& pk = particles[k];
+        const Particle& pq = particles[q];
+        const Particle& pk = particles[k];
         Vector dif = pq.pos - pk.pos;
         double disSq = dif.lengthSq();
         double multi = G / disSq;
         Vector force = dif.normalized() * multi;
-        pq.acc -= force * pk.mass;
-        pk.acc += force * pq.mass;
+        accs[q] -= force * pk.mass;
+        accs[k] += force * pq.mass;
     }
 }
 
-void stepEuler(Particle particles[], size_t n, double dt){
-    solveReduced(particles, n);
+void stepEuler(Particle particles[], Vector accs[], size_t n, double dt){
+    solveReduced(particles, accs, n);
     for(size_t i = 0; i < n; i++){
         Particle& p = particles[i];
-        p.vel += p.acc * dt;
+        p.vel += accs[i] * dt;
         p.pos += p.vel * dt;
     }
 }
 
-void stepRungeKutta(Particle particles[], size_t n, double dt){
-    solveReduced(particles, n);
+void stepRungeKutta(Particle particles[], Vector accs[], size_t n, double dt){
+    solveReduced(particles, accs, n);
     for(size_t i = 0; i < n; i++){
         Particle& p = particles[i];
 
         Vector pos = p.pos;
         Vector vel = p.vel;
 
-        Vector vk1 = p.acc;
+        Vector vk1 = accs[i];
         Vector pk1 = vel;
 
         p.pos = pos + pk1 * (dt / 2);
-        solveSingle(particles, n, i);
-        Vector vk2 = p.acc;
+        Vector vk2 = solveSingle(particles, n, i);
         Vector pk2 = vel + vk1 * (dt / 2);
 
         p.pos = pos + pk2 * (dt / 2);
-        solveSingle(particles, n, i);
-        Vector vk3 = p.acc;
+        Vector vk3 = solveSingle(particles, n, i);
         Vector pk3 = vel + vk2 * (dt / 2);
 
         p.pos = pos + pk3 * dt;
-        solveSingle(particles, n, i);
-        Vector vk4 = p.acc;
+        Vector vk4 = solveSingle(particles, n, i);
         Vector pk4 = vel + vk3 * dt;
 
         p.pos = pos;

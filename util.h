@@ -1,6 +1,8 @@
 #ifndef PARALLEL_PROG_LABS_UTIL_H
 #define PARALLEL_PROG_LABS_UTIL_H
 
+#include <time.h>
+
 #define array(TYPE, SIZE) (TYPE*)malloc(sizeof(TYPE) * (SIZE))
 
 #define DECLARE_TIMED_VARIABLES() struct timespec start, end;
